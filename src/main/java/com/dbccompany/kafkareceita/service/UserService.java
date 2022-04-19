@@ -2,13 +2,16 @@ package com.dbccompany.kafkareceita.service;
 
 
 import com.dbccompany.kafkareceita.dataTransfer.*;
+import com.dbccompany.kafkareceita.entity.ProductEntity;
 import com.dbccompany.kafkareceita.entity.UserEntity;
 import com.dbccompany.kafkareceita.exceptions.ObjectNotFoundException;
+import com.dbccompany.kafkareceita.repository.ProductRepository;
 import com.dbccompany.kafkareceita.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,6 +25,8 @@ public class UserService {
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final ProducerService producerService;
+    private final ProductRepository productRepository;
+    private final EmailService emailService;
 
     public List<UserFormedDTO> readAllUsers() throws JsonProcessingException {
         producerService.sendMessage(logInfo.constroiLog("Chamada de método service:: Encontrar usuários cadastrados."
@@ -81,4 +86,28 @@ public class UserService {
                 .map(u -> objectMapper.convertValue(u, UserFormedDTO.class))
                 .collect(Collectors.toList());
     }
+
+    @Scheduled(cron = "0 0 0 1 * *")
+    public void emailPromocao() {
+        ProductEntity product = productRepository.findAll().stream().findAny().orElseThrow();
+        List<UserEntity> users = userRepository.findAll();
+        users.forEach(userEntity -> emailService.sendSimpleMessage(userEntity.getEmail(),
+                String.format("""
+                        Olá %s, tudo bem?
+                        Nós do recipe app, estamos aqui para te oferecer uma oferta!!!
+                        O produto %s está com 30% de desconto, vem conferir! ;)
+                        """, userEntity.getName(), product.getProductName())));
+    }
+
+    @Scheduled(cron = "0 0 0 1 3 *")
+    public void emailTrocaSenha() {
+        List<UserEntity> users = userRepository.findAll();
+        users.forEach(userEntity -> emailService.sendSimpleMessage(userEntity.getEmail(),
+                String.format("""
+                        Olá %s, tudo bem?
+                        Recomendamos que por medida de segurança, você altere a senha.
+                        Esperamos por você!
+                        """, userEntity.getName())));
+    }
+
 }
